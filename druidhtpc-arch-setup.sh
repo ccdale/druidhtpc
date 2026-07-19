@@ -236,7 +236,7 @@ if [[ -z $DISPLAY && $(tty) == /dev/tty1 ]]; then
 fi
 EOF
 fi
-chown chris:users /mnt/home/chris/.bash_profile
+arch-chroot /mnt chown chris:users /home/chris/.bash_profile
 
 echo "=== [12/14] Configuring .xinitrc Startup Chain ==="
 # Define the X11 launch parameters
@@ -256,7 +256,7 @@ exec icewm-session
 EOF
 
 chmod +x /mnt/home/chris/.xinitrc
-chown chris:users /mnt/home/chris/.xinitrc
+arch-chroot /mnt chown chris:users /home/chris/.xinitrc
 
 
 echo "=== [13/14] Automating vidtv Kernel Module Initialization ==="
