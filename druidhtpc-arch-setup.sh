@@ -35,13 +35,13 @@ echo "=== [1/14] Creating GPT Partition Layout (56 GB Total Required) ==="
 blkdiscard -f "${TARGET_DISK}" || true
 
 # Execute a precise script-driven sfdisk partition sequence
-# Layout: 1GB ESP (Type 1), 15GB Slot A (Type 23), 15GB Slot B (Type 23), Remainder Linux Home (Type 42)
+# Layout: 1GB ESP (U), 15GB Slot A (L), 15GB Slot B (L), Remainder Linux Home (L)
 sfdisk "${TARGET_DISK}" <<EOF
 label: gpt
-size=1GiB,      type=1, name="ESP"
-size=15GiB,     type=23, name="Slot_A"
-size=15GiB,     type=23, name="Slot_B"
-type=42,        name="Home"
+size=1GiB  type=U  name="ESP"
+size=15GiB type=L  name="Slot_A"
+size=15GiB type=L  name="Slot_B"
+type=L            name="Home"
 EOF
 
 # Notify the kernel of partition alterations
@@ -51,7 +51,7 @@ sleep 2
 # Recording drive uses one dedicated data partition.
 sfdisk "${RECORDING_DISK}" <<EOF
 label: gpt
-type=20, name="Recording_Data"
+type=L name="Recording_Data"
 EOF
 partprobe "${RECORDING_DISK}"
 sleep 2
