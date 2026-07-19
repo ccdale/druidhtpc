@@ -59,11 +59,21 @@ echo "Allocated Virtual OS SSD: ${OS_SSD_PATH} (${OS_SSD_SIZE}GB)"
 echo "Allocated Virtual Recording HDD: ${DATA_HDD_PATH} (${DATA_HDD_SIZE}GB)"
 
 echo "=== [3/4] Provisioning VM via Libvirt & QEMU ==="
+# Use libvirt default network when available; otherwise fall back to user-mode NAT.
+if virsh --connect qemu:///session net-info default >/dev/null 2>&1; then
+  NETWORK_ARG=(--network network=default)
+  echo "Using libvirt network: default"
+else
+  NETWORK_ARG=(--network user)
+  echo "libvirt network 'default' not found in qemu:///session; falling back to user-mode NAT"
+fi
+
 # Execute virt-install against the user-space session daemon
 virt-install \
   --connect qemu:///session \
   --name="${VM_NAME}" \
   --ram="${RAM_MB}" \
+  --memorybacking access.mode=shared \
   --vcpus="${VCPUS}" \
   --cpu host-passthrough \
   --boot uefi \
@@ -72,7 +82,7 @@ virt-install \
   --disk path="${DATA_HDD_PATH}",format=qcow2,bus=sata,cache=none \
   --filesystem source="${HOST_WORK_SHARE_DIR}",target=work,driver.type=virtiofs \
   --cdrom "${ARCH_ISO}" \
-  --network network=default \
+  "${NETWORK_ARG[@]}" \
   --graphics spice,listen=127.0.0.1 \
   --channel spicevmc \
   --noautoconsole
