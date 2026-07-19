@@ -13,10 +13,16 @@ Before starting, make sure the following are true on the host:
 
 * `build-druidhtpc.sh` points at a valid Arch ISO path.
 * libvirt/QEMU tooling is installed and working for `qemu:///session`.
-* `virt-install`, `virsh`, `virt-viewer`, and `qemu-img` are available.
+* required packages are installed: `libvirt` (provides `virsh`), `virt-install`, `virt-viewer`, and `qemu-img` (from QEMU tools)
 * `$HOME/src/druidhtpc/work/packages/` exists on the host and contains exactly one `dvbstreamer-t2` package
 * you have built one `dvbstreamer-t2-*.pkg.tar.zst` package in a clean Arch environment
 * host `$HOME/src/druidhtpc/work/` is writable by your user
+
+On Arch/Manjaro this is typically:
+
+```bash
+sudo pacman -S --needed libvirt virt-install virt-viewer qemu-desktop
+```
 
 For the package build workflow, see `druidhtpc-dvbstreamer-build.md`.
 
