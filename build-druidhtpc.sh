@@ -42,9 +42,9 @@ if virsh --connect qemu:///session list --all --name | grep -q "^${VM_NAME}$"; t
         virsh --connect qemu:///session destroy "${VM_NAME}" >/dev/null
     fi
     
-    # Undefine from libvirt registry
+    # Undefine from libvirt registry (UEFI guests need NVRAM removal too)
     echo "Removing VM definition..."
-    virsh --connect qemu:///session undefine "${VM_NAME}" >/dev/null
+    virsh --connect qemu:///session undefine "${VM_NAME}" --nvram >/dev/null
 fi
 
 # Explicitly purge old virtual disk files if they remain on the file system
