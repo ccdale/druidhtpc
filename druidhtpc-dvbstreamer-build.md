@@ -5,7 +5,7 @@ This note describes how to build a clean Arch package for `dvbstreamer-t2` on th
 The goal is:
 
 1. Build `dvbstreamer-t2` in a real Arch userspace.
-2. Copy the resulting `*.pkg.tar.zst` file into the local `packages/` directory beside `druidhtpc-arch-setup.sh`.
+2. Copy the resulting `*.pkg.tar.zst` file into host `$HOME/src/druidhtpc/work/packages/`.
 3. Let the installer copy that package into the target VM and install it with `pacman -U`.
 
 ## Why do it this way?
@@ -100,15 +100,15 @@ dvbstreamer-t2-<version>-x86_64.pkg.tar.zst
 Back on the host:
 
 ```bash
-mkdir -p /home/chris/src/druidhtpc/packages
-cp ~/build/dvbstreamer-t2/build/dvbstreamer-t2/dvbstreamer-t2-[0-9]*-x86_64.pkg.tar.zst /home/chris/src/druidhtpc/packages/
+mkdir -p /home/chris/src/druidhtpc/work/packages
+cp ~/build/dvbstreamer-t2/build/dvbstreamer-t2/dvbstreamer-t2-[0-9]*-x86_64.pkg.tar.zst /home/chris/src/druidhtpc/work/packages/
 ```
 
 Only copy the main package. Do not copy the `dvbstreamer-t2-debug-...` package into the staging directory.
 
 ### 6. Run the HTPC installer
 
-The installer now expects exactly one staged package in the repo `packages/` directory:
+The installer now expects exactly one staged package in guest `/work/packages/` (host `$HOME/src/druidhtpc/work/packages/`).
 
 ```bash
 cd /home/chris/src/druidhtpc
@@ -156,7 +156,7 @@ exit
 After that, copy the resulting package into:
 
 ```bash
-/home/chris/src/druidhtpc/packages/
+/home/chris/src/druidhtpc/work/packages/
 ```
 
 ## Option 3: Manual Arch chroot/bootstrap root
@@ -218,16 +218,16 @@ exit
 From another host shell, or after leaving the chroot:
 
 ```bash
-mkdir -p /home/chris/src/druidhtpc/packages
-sudo cp /var/lib/archbuild-root/root/build/dvbstreamer-t2/dvbstreamer-t2-[0-9]*-x86_64.pkg.tar.zst /home/chris/src/druidhtpc/packages/
-sudo chown chris:chris /home/chris/src/druidhtpc/packages/dvbstreamer-t2-[0-9]*-x86_64.pkg.tar.zst
+sudo mkdir -p /home/chris/src/druidhtpc/work/packages
+sudo cp /var/lib/archbuild-root/root/build/dvbstreamer-t2/dvbstreamer-t2-[0-9]*-x86_64.pkg.tar.zst /home/chris/src/druidhtpc/work/packages/
+sudo chown chris:chris /home/chris/src/druidhtpc/work/packages/dvbstreamer-t2-[0-9]*-x86_64.pkg.tar.zst
 ```
 
 ## Updating the package later
 
 When you want a newer build:
 
-1. Delete the old `dvbstreamer-t2-*.pkg.tar.*` from `/home/chris/src/druidhtpc/packages/`.
+1. Delete the old `dvbstreamer-t2-*.pkg.tar.*` from `$HOME/src/druidhtpc/work/packages/`.
 2. Rebuild in the Arch container or chroot.
 3. Copy in the new package.
 4. Re-run the installer or install manually inside a VM with `pacman -U`.
@@ -237,7 +237,7 @@ When you want a newer build:
 The installer looks for exactly one matching file:
 
 ```bash
-/home/chris/src/druidhtpc/packages/dvbstreamer-t2-[0-9]*-*.pkg.tar.*
+$HOME/src/druidhtpc/work/packages/dvbstreamer-t2-[0-9]*-*.pkg.tar.*
 ```
 
 If there are zero matches or more than one match, the installer exits with a clear error. In particular, do not stage the `dvbstreamer-t2-debug-...` package.
@@ -258,7 +258,7 @@ sudo pacman -U /path/to/dvbstreamer-t2-<version>-x86_64.pkg.tar.zst
 For this HTPC project, the most practical loop is:
 
 1. Build `dvbstreamer-t2` in an Arch container on the host.
-2. Copy the package into `/home/chris/src/druidhtpc/packages/`.
+2. Copy the package into `$HOME/src/druidhtpc/work/packages/`.
 3. Rebuild test VMs in GNOME Boxes as needed.
 4. Use the same package artifact for repeated installer runs until you intentionally update it.
 

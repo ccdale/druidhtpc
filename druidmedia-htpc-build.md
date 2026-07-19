@@ -14,8 +14,9 @@ Before starting, make sure the following are true on the host:
 * `build-druidhtpc.sh` points at a valid Arch ISO path.
 * libvirt/QEMU tooling is installed and working for `qemu:///session`.
 * `virt-install`, `virsh`, `virt-viewer`, and `qemu-img` are available.
+* `$HOME/src/druidhtpc/work/packages/` exists on the host and contains exactly one `dvbstreamer-t2` package
 * you have built one `dvbstreamer-t2-*.pkg.tar.zst` package in a clean Arch environment
-* that package is staged in `packages/` beside `druidhtpc-arch-setup.sh`
+* host `$HOME/src/druidhtpc/work/` is writable by your user
 
 For the package build workflow, see `druidhtpc-dvbstreamer-build.md`.
 
@@ -27,6 +28,7 @@ For the package build workflow, see `druidhtpc-dvbstreamer-build.md`.
 * one recording disk at 40 GB
 * a UEFI Arch VM named `druidhtpc-test-env`
 * a SPICE display opened with `virt-viewer`
+* a virtiofs share from host `$HOME/src/druidhtpc/work` to guest `/work`
 
 This matches the installer's expectation that the guest will see:
 
@@ -69,39 +71,29 @@ You should see:
 * `/dev/sda` as the 64 GB OS disk
 * `/dev/sdb` as the 40 GB recording disk
 
-## 5. Make the repo available inside the VM
+## 5. Mount the shared /work directory inside the VM
 
-The installer expects the repo contents and the staged `dvbstreamer-t2` package to be available inside the live environment.
+This workflow uses a single shared path to avoid copy/paste transfer steps and to isolate ownership changes in a dedicated `work/` area away from tracked source files.
 
-Any transfer method is fine. Use whichever is quickest at the time:
-
-### Option A: Temporary web server from the host
-
-On the host:
+Inside the Arch live environment:
 
 ```bash
-cd /home/chris/src
-python3 -m http.server 8000
+mkdir -p /work
+mount -t virtiofs work /work
+ls -l /work
 ```
 
-Then inside the VM, if the host is reachable from the guest, fetch an archive or individual files.
+You should then have:
 
-### Option B: Copy the repo in with `scp`
-
-If you have SSH access set up between host and guest, copy the repo directory and package into the live environment.
-
-### Option C: Shared folder or manual transfer
-
-A shared folder, ISO, or any manual copy method is also fine. The important point is simply that inside the live environment you have:
-
-* `druidhtpc-arch-setup.sh`
-* the `packages/` directory containing exactly one `dvbstreamer-t2-*.pkg.tar.*`
+* `/work/druidhtpc/druidhtpc-arch-setup.sh`
+* `/work/packages/` containing exactly one `dvbstreamer-t2-*.pkg.tar.*`
 
 ## 6. Run the installer inside the VM
 
-From the directory containing `druidhtpc-arch-setup.sh` inside the guest:
+From the shared project directory inside the guest:
 
 ```bash
+cd /work/druidhtpc
 chmod +x druidhtpc-arch-setup.sh
 ./druidhtpc-arch-setup.sh
 ```
@@ -117,7 +109,7 @@ The installer will:
 7. configure systemd-boot entries for Slot A and Slot B
 8. configure IceWM autologin, X startup, Kodi toggle script, and vidtv helpers
 
-If the package staging directory is missing, or contains zero or multiple matching `dvbstreamer-t2` packages, the installer will stop with an error.
+By default the installer will use guest `/work/packages` when present (host `$HOME/src/druidhtpc/work/packages`). If that directory is missing, or contains zero or multiple matching packages, the installer will stop with an error.
 
 ## 7. Reboot and test
 
@@ -176,9 +168,10 @@ That confirms the A/B root swap is working while shared user data and recording 
 When iterating:
 
 1. rebuild or replace the staged `dvbstreamer-t2` package if needed
-2. rerun `./build-druidhtpc.sh` on the host
-3. re-enter the live environment
-4. rerun `./druidhtpc-arch-setup.sh` inside the fresh VM
+2. ensure the package is in `$HOME/src/druidhtpc/work/packages`
+3. rerun `./build-druidhtpc.sh` on the host
+4. re-enter the live environment
+5. rerun `./druidhtpc-arch-setup.sh` inside the fresh VM
 
 That gives you a clean repeatable test loop for the eventual physical HTPC install.
 

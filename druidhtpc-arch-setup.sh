@@ -11,7 +11,13 @@ set -euo pipefail
 TARGET_DISK="/dev/sda"
 RECORDING_DISK="/dev/sdb"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PACKAGE_STAGING_DIR="${PACKAGE_STAGING_DIR:-${SCRIPT_DIR}/packages}"
+if [[ -n "${PACKAGE_STAGING_DIR:-}" ]]; then
+  PACKAGE_STAGING_DIR="${PACKAGE_STAGING_DIR}"
+elif [[ -d /work/packages ]]; then
+  PACKAGE_STAGING_DIR="/work/packages"
+else
+  PACKAGE_STAGING_DIR="${SCRIPT_DIR}/packages"
+fi
 
 # Resolve partition names for both sdX and nvme/mmc devices.
 partition_path() {
@@ -107,7 +113,7 @@ echo "=== [6/14] Installing Staged dvbstreamer-t2 Package ==="
 # Copy one prebuilt package into the target and install it there.
 mkdir -p /mnt/root/packages
 shopt -s nullglob
-package_matches=("${PACKAGE_STAGING_DIR}"/dvbstreamer-t2-*.pkg.tar.*)
+package_matches=("${PACKAGE_STAGING_DIR}"/dvbstreamer-t2-[0-9]*-*.pkg.tar.*)
 shopt -u nullglob
 
 if [[ ${#package_matches[@]} -ne 1 ]]; then

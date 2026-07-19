@@ -7,12 +7,16 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # --- CONFIGURATION ---
 VM_NAME="druidhtpc-test-env"
 RAM_MB=4096
 VCPUS=2
 DISK_DIR="${HOME}/.local/share/gnome-boxes/images" # Matches GNOME Boxes default storage path
 ARCH_ISO="${HOME}/Downloads/archlinux-x86_64.iso" # Update this path to your Arch ISO
+HOST_WORK_SHARE_DIR="${SCRIPT_DIR}/work"
+HOST_VM_WORK_DIR="${HOST_WORK_SHARE_DIR}/druidhtpc"
 
 # Virtual Storage Disk Definitions
 OS_SSD_PATH="${DISK_DIR}/${VM_NAME}-os-ssd.qcow2"
@@ -22,6 +26,10 @@ DATA_HDD_SIZE=40 # 40GB virtual drive to test the raw TS stream buffer allocatio
 
 echo "=== [1/4] Preparing Host Storage & Environment ==="
 mkdir -p "${DISK_DIR}"
+mkdir -p "${HOST_VM_WORK_DIR}" "${HOST_WORK_SHARE_DIR}/packages"
+
+# Stage installer files in a dedicated shared workspace to avoid touching source-tree ownership.
+install -m 0755 "${SCRIPT_DIR}/druidhtpc-arch-setup.sh" "${HOST_VM_WORK_DIR}/druidhtpc-arch-setup.sh"
 
 # --- AUTOMATED CLEANUP / ITERATION LOOP ---
 # If the VM exists from a previous test run, wipe it out completely to ensure a clean state
@@ -62,6 +70,7 @@ virt-install \
   --os-variant=archlinux \
   --disk path="${OS_SSD_PATH}",format=qcow2,bus=sata,cache=none \
   --disk path="${DATA_HDD_PATH}",format=qcow2,bus=sata,cache=none \
+  --filesystem source="${HOST_WORK_SHARE_DIR}",target=work,driver.type=virtiofs \
   --cdrom "${ARCH_ISO}" \
   --network network=default \
   --graphics spice,listen=127.0.0.1 \
