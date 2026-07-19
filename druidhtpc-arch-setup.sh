@@ -105,8 +105,8 @@ echo "=== [5/14] Provisioning User 'chris' ==="
 if ! arch-chroot /mnt id -u chris > /dev/null 2>&1; then
   arch-chroot /mnt useradd -m -g users -G wheel,audio,video,storage,optical -s /bin/bash chris
 fi
-# Assign a temporary password (chris) - change this upon final bare-metal rollout
-echo "chris:chris" | arch-chroot /mnt chpasswd
+# Do not set a default password in automation.
+echo "Post-install action required: set the chris password with: arch-chroot /mnt passwd chris"
 
 echo "=== [6/14] Installing Staged dvbstreamer-t2 Package ==="
 
