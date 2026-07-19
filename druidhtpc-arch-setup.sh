@@ -78,6 +78,15 @@ mount "${PART_ESP}" /mnt/boot
 mount "${PART_HOME}" /mnt/home
 mount "${PART_RECORDING}" /mnt/data
 
+# Reuse host-backed pacman cache when /work is mounted via virtiofs.
+if mountpoint -q /work; then
+  mkdir -p /work/pacman-cache /mnt/var/cache/pacman/pkg
+  mount --bind /work/pacman-cache /mnt/var/cache/pacman/pkg
+  echo "Using host pacman cache at /work/pacman-cache"
+else
+  echo "/work is not mounted; using VM-local pacman cache"
+fi
+
 echo "=== [4/14] Bootstrapping Base System & Multimedia Backends ==="
 # Essential system packages, IceWM environment, and DVB utilities
 pacstrap -K /mnt \

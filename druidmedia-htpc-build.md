@@ -93,6 +93,7 @@ You should then have:
 
 * `/work/druidhtpc/druidhtpc-arch-setup.sh`
 * `/work/packages/` containing exactly one `dvbstreamer-t2-*.pkg.tar.*`
+* `/work/pacman-cache/` used as the persistent package cache across rebuilds
 
 ## 6. Run the installer inside the VM
 
@@ -114,6 +115,8 @@ The installer will:
 6. install the staged `dvbstreamer-t2` package with `pacman -U`
 7. configure systemd-boot entries for Slot A and Slot B
 8. configure IceWM autologin, X startup, Kodi toggle script, and vidtv helpers
+
+When `/work` is mounted, the installer bind-mounts `/work/pacman-cache` to `/mnt/var/cache/pacman/pkg` before `pacstrap`, so downloaded package archives are reused on future rebuilds.
 
 By default the installer will use guest `/work/packages` when present (host `$HOME/src/druidhtpc/work/packages`). If that directory is missing, or contains zero or multiple matching packages, the installer will stop with an error.
 
