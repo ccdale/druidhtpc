@@ -93,6 +93,7 @@ pacstrap -K /mnt \
   base \
   linux \
   linux-firmware \
+  networkmanager \
   intel-ucode \
   amd-ucode \
   xorg-server \
@@ -157,6 +158,9 @@ done
 
 arch-chroot /mnt pacman -U --noconfirm "${target_packages[@]}"
 echo "Installed ${#target_packages[@]} staged package(s) from ${PACKAGE_STAGING_DIR}."
+
+# Bring up standard LAN networking for ccatv's Flask app and other services.
+arch-chroot /mnt systemctl enable NetworkManager
 
 
 echo "=== [7/14] Deploying systemd-boot Configurations ==="
