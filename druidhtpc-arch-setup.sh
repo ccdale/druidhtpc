@@ -105,6 +105,7 @@ pacstrap -K /mnt \
   xdotool \
   lirc \
   rsync \
+  sudo \
   vim
 
 # Generate explicit fstab file using persistent unique hardware UUID identifiers
@@ -114,27 +115,48 @@ echo "=== [5/14] Provisioning User 'chris' ==="
 if ! arch-chroot /mnt id -u chris > /dev/null 2>&1; then
   arch-chroot /mnt useradd -m -g users -G wheel,audio,video,storage,optical -s /bin/bash chris
 fi
+
+# Allow clean power controls from IceWM without prompting for a password.
+cat << 'EOF' > /mnt/etc/sudoers.d/chris-power
+chris ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff, /usr/bin/systemctl reboot, /usr/bin/poweroff, /usr/bin/reboot, /usr/bin/shutdown, /usr/bin/loginctl poweroff, /usr/bin/loginctl reboot
+EOF
+chmod 0440 /mnt/etc/sudoers.d/chris-power
+
 # Do not set a default password in automation.
 echo "Post-install action required: set the chris password with: arch-chroot /mnt passwd chris"
 
-echo "=== [6/14] Installing Staged dvbstreamer-t2 Package ==="
+echo "=== [6/14] Installing Staged Package Set ==="
 
-# Copy one prebuilt package into the target and install it there.
+# Copy all staged package artifacts into the target and install them there.
 mkdir -p /mnt/root/packages
 shopt -s nullglob
-package_matches=("${PACKAGE_STAGING_DIR}"/dvbstreamer-t2-[0-9]*-*.pkg.tar.*)
+package_matches=("${PACKAGE_STAGING_DIR}"/*.pkg.tar.*)
 shopt -u nullglob
 
-if [[ ${#package_matches[@]} -ne 1 ]]; then
-  echo "Expected exactly one dvbstreamer-t2 package in ${PACKAGE_STAGING_DIR}" >&2
-  echo "Build the package separately and place the resulting .pkg.tar.zst file there before running this installer." >&2
+install_packages=()
+for pkg in "${package_matches[@]}"; do
+  base="$(basename "${pkg}")"
+  if [[ "${base}" == *-debug-* || "${base}" == *.sig ]]; then
+    continue
+  fi
+  install_packages+=("${pkg}")
+done
+
+if [[ ${#install_packages[@]} -eq 0 ]]; then
+  echo "Expected at least one package artifact in ${PACKAGE_STAGING_DIR}" >&2
+  echo "Stage package files (for example dvbstreamer-t2/comskip/ccatv) before running this installer." >&2
   exit 1
 fi
 
-package_filename="$(basename "${package_matches[0]}")"
-cp "${package_matches[0]}" "/mnt/root/packages/${package_filename}"
-arch-chroot /mnt pacman -U --noconfirm "/root/packages/${package_filename}"
-echo "dvbstreamer-t2 installed from staged package ${package_filename}."
+target_packages=()
+for pkg in "${install_packages[@]}"; do
+  package_filename="$(basename "${pkg}")"
+  cp "${pkg}" "/mnt/root/packages/${package_filename}"
+  target_packages+=("/root/packages/${package_filename}")
+done
+
+arch-chroot /mnt pacman -U --noconfirm "${target_packages[@]}"
+echo "Installed ${#target_packages[@]} staged package(s) from ${PACKAGE_STAGING_DIR}."
 
 
 echo "=== [7/14] Deploying systemd-boot Configurations ==="
@@ -203,9 +225,15 @@ chmod +x "${CHRIS_HOME}/scripts/toggle-kodi.sh"
 # Uses clear, explicit keysym strings mapped directly to your requested keys
 cat << EOF > "${CHRIS_HOME}/.icewm/keys"
 # DruidHTPC System Keybindings
-key "K" /home/chris/scripts/toggle-kodi.sh
-key "T" xterm
-key "F" firefox
+key "Ctrl+K" /home/chris/scripts/toggle-kodi.sh
+key "Ctrl+T" xterm
+key "Ctrl+F" firefox
+EOF
+
+# Ensure IceWM power menu actions work in this minimal setup.
+cat << 'EOF' > "${CHRIS_HOME}/.icewm/prefoverride"
+ShutdownCommand="sudo /usr/bin/systemctl poweroff"
+RebootCommand="sudo /usr/bin/systemctl reboot"
 EOF
 
 # 5. Fix permissions so the user owns their own configuration footprint
