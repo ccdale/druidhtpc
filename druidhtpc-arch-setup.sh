@@ -91,11 +91,14 @@ echo "=== [4/14] Bootstrapping Base System & Multimedia Backends ==="
 # Essential system packages, IceWM environment, and DVB utilities
 pacstrap -K /mnt \
   base \
+  git \
   linux \
   linux-firmware \
   networkmanager \
+  python \
   intel-ucode \
   amd-ucode \
+  uv \
   xorg-server \
   xorg-xinit \
   xterm \
