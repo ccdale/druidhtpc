@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+### Added
+
+- Add an installed A/B slot helper that clones the active root before updating the inactive slot.
+
 ## [0.1.0] - 2026-07-19
 
 ### Added

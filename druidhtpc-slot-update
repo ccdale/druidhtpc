@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ ${EUID} -ne 0 ]]; then
+  echo "Run this script as root." >&2
+  exit 1
+fi
+
+for command in blkid chroot findmnt install lsblk mount pacman readlink rsync sed; do
+  if ! command -v "${command}" > /dev/null 2>&1; then
+    echo "Required command not found: ${command}" >&2
+    exit 1
+  fi
+done
+
+ACTIVE_DEVICE="$(findmnt -nro SOURCE /)"
+ACTIVE_DEVICE="$(readlink -f "${ACTIVE_DEVICE}")"
+ACTIVE_LABEL="$(lsblk -dnro LABEL "${ACTIVE_DEVICE}")"
+
+case "${ACTIVE_LABEL}" in
+  Slot_A)
+    INACTIVE_LABEL="Slot_B"
+    ACTIVE_BOOT_SUFFIX=""
+    BOOT_SUFFIX="-b"
+    ;;
+  Slot_B)
+    INACTIVE_LABEL="Slot_A"
+    ACTIVE_BOOT_SUFFIX="-b"
+    BOOT_SUFFIX=""
+    ;;
+  *)
+    echo "Root filesystem ${ACTIVE_DEVICE} is not labelled Slot_A or Slot_B." >&2
+    exit 1
+    ;;
+esac
+
+INACTIVE_DEVICE="$(blkid -L "${INACTIVE_LABEL}" || true)"
+if [[ -z "${INACTIVE_DEVICE}" ]]; then
+  echo "Could not find inactive root filesystem labelled ${INACTIVE_LABEL}." >&2
+  exit 1
+fi
+INACTIVE_DEVICE="$(readlink -f "${INACTIVE_DEVICE}")"
+
+if findmnt -rnS "${INACTIVE_DEVICE}" > /dev/null; then
+  echo "Inactive slot ${INACTIVE_DEVICE} is already mounted; refusing to continue." >&2
+  exit 1
+fi
+
+SLOT_MOUNT="$(mktemp -d /mnt/druidhtpc-slot.XXXXXX)"
+MOUNTED_PATHS=()
+
+cleanup() {
+  local index
+  for ((index = ${#MOUNTED_PATHS[@]} - 1; index >= 0; index--)); do
+    umount -R "${MOUNTED_PATHS[index]}" 2>/dev/null || true
+  done
+  rmdir "${SLOT_MOUNT}" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+mount "${INACTIVE_DEVICE}" "${SLOT_MOUNT}"
+MOUNTED_PATHS+=("${SLOT_MOUNT}")
+
+echo "Cloning active ${ACTIVE_LABEL} (${ACTIVE_DEVICE}) to ${INACTIVE_LABEL} (${INACTIVE_DEVICE})..."
+rsync -aHAXx --delete --numeric-ids / "${SLOT_MOUNT}/"
+
+ACTIVE_UUID="$(blkid -s UUID -o value "${ACTIVE_DEVICE}")"
+INACTIVE_UUID="$(blkid -s UUID -o value "${INACTIVE_DEVICE}")"
+sed -i "s#UUID=${ACTIVE_UUID}#UUID=${INACTIVE_UUID}#" "${SLOT_MOUNT}/etc/fstab"
+rm -f "${SLOT_MOUNT}/var/lib/pacman/db.lck"
+
+install -m644 "/boot/vmlinuz-linux${ACTIVE_BOOT_SUFFIX}" "${SLOT_MOUNT}/boot/vmlinuz-linux"
+install -m644 "/boot/initramfs-linux${ACTIVE_BOOT_SUFFIX}.img" "${SLOT_MOUNT}/boot/initramfs-linux.img"
+if [[ -f "/boot/initramfs-linux${ACTIVE_BOOT_SUFFIX}-fallback.img" ]]; then
+  install -m644 "/boot/initramfs-linux${ACTIVE_BOOT_SUFFIX}-fallback.img" "${SLOT_MOUNT}/boot/initramfs-linux-fallback.img"
+fi
+for microcode in amd-ucode.img intel-ucode.img; do
+  if [[ -f "/boot/${microcode}" ]]; then
+    install -m644 "/boot/${microcode}" "${SLOT_MOUNT}/boot/${microcode}"
+  fi
+done
+
+mount --rbind /dev "${SLOT_MOUNT}/dev"
+mount --make-rslave "${SLOT_MOUNT}/dev"
+MOUNTED_PATHS+=("${SLOT_MOUNT}/dev")
+mount -t proc proc "${SLOT_MOUNT}/proc"
+MOUNTED_PATHS+=("${SLOT_MOUNT}/proc")
+mount --rbind /sys "${SLOT_MOUNT}/sys"
+mount --make-rslave "${SLOT_MOUNT}/sys"
+MOUNTED_PATHS+=("${SLOT_MOUNT}/sys")
+mount --rbind /run "${SLOT_MOUNT}/run"
+mount --make-rslave "${SLOT_MOUNT}/run"
+MOUNTED_PATHS+=("${SLOT_MOUNT}/run")
+
+echo "Updating ${INACTIVE_LABEL}..."
+chroot "${SLOT_MOUNT}" /usr/bin/pacman -Syu "$@"
+
+install -m644 "${SLOT_MOUNT}/boot/vmlinuz-linux" "/boot/vmlinuz-linux${BOOT_SUFFIX}"
+install -m644 "${SLOT_MOUNT}/boot/initramfs-linux.img" "/boot/initramfs-linux${BOOT_SUFFIX}.img"
+if [[ -f "${SLOT_MOUNT}/boot/initramfs-linux-fallback.img" ]]; then
+  install -m644 "${SLOT_MOUNT}/boot/initramfs-linux-fallback.img" "/boot/initramfs-linux${BOOT_SUFFIX}-fallback.img"
+fi
+for microcode in amd-ucode.img intel-ucode.img; do
+  if [[ -f "${SLOT_MOUNT}/boot/${microcode}" ]]; then
+    install -m644 "${SLOT_MOUNT}/boot/${microcode}" "/boot/${microcode}"
+  fi
+done
+
+sync
+echo "${INACTIVE_LABEL} is cloned, updated, and ready to test from the boot menu."

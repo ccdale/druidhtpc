@@ -18,6 +18,8 @@ elif [[ -d /work/packages ]]; then
 else
   PACKAGE_STAGING_DIR="${SCRIPT_DIR}/packages"
 fi
+MIRRORLIST_SOURCE="${MIRRORLIST_SOURCE:-/work/ukmirrorlist}"
+SLOT_UPDATE_SOURCE="${SCRIPT_DIR}/druidhtpc-slot-update"
 
 # Resolve partition names for both sdX and nvme/mmc devices.
 partition_path() {
@@ -30,7 +32,7 @@ partition_path() {
   fi
 }
 
-echo "=== [1/14] Creating GPT Partition Layout (56 GB Total Required) ==="
+echo "=== [1/15] Creating GPT Partition Layout (56 GB Total Required) ==="
 # Wipe existing partition signatures cleanly
 blkdiscard -f "${TARGET_DISK}" || true
 
@@ -63,14 +65,14 @@ PART_SLOT_B="$(partition_path "${TARGET_DISK}" 3)"
 PART_HOME="$(partition_path "${TARGET_DISK}" 4)"
 PART_RECORDING="$(partition_path "${RECORDING_DISK}" 1)"
 
-echo "=== [2/14] Initializing Filesystems ==="
+echo "=== [2/15] Initializing Filesystems ==="
 mkfs.vfat -F32 -n "ESP" "${PART_ESP}"
 mkfs.ext4 -F -L "Slot_A" "${PART_SLOT_A}"
 mkfs.ext4 -F -L "Slot_B" "${PART_SLOT_B}"
 mkfs.ext4 -F -L "Shared_Home" "${PART_HOME}"
 mkfs.ext4 -F -L "Recording_Data" "${PART_RECORDING}"
 
-echo "=== [3/14] Mounting Target Environment (Defaulting to Active Slot A) ==="
+echo "=== [3/15] Mounting Target Environment (Defaulting to Active Slot A) ==="
 mount "${PART_SLOT_A}" /mnt
 mkdir -p /mnt/boot /mnt/home /mnt/data
 
@@ -87,7 +89,15 @@ else
   echo "/work is not mounted; using VM-local pacman cache"
 fi
 
-echo "=== [4/14] Bootstrapping Base System & Multimedia Backends ==="
+echo "=== [4/15] Bootstrapping Base System & Multimedia Backends ==="
+# Configure the live installer and target system to use the supplied mirrorlist.
+if [[ ! -f "${MIRRORLIST_SOURCE}" ]]; then
+  echo "Expected mirrorlist at ${MIRRORLIST_SOURCE}" >&2
+  exit 1
+fi
+install -Dm644 "${MIRRORLIST_SOURCE}" /etc/pacman.d/mirrorlist
+install -Dm644 "${MIRRORLIST_SOURCE}" /mnt/etc/pacman.d/mirrorlist
+
 # Essential system packages, IceWM environment, and DVB utilities
 pacstrap -K /mnt \
   base \
@@ -115,21 +125,21 @@ pacstrap -K /mnt \
 # Generate explicit fstab file using persistent unique hardware UUID identifiers
 genfstab -U /mnt > /mnt/etc/fstab
 
-echo "=== [5/14] Provisioning User 'chris' ==="
+echo "=== [5/15] Provisioning User 'chris' ==="
 if ! arch-chroot /mnt id -u chris > /dev/null 2>&1; then
   arch-chroot /mnt useradd -m -g users -G wheel,audio,video,storage,optical -s /bin/bash chris
 fi
 
 # Allow clean power controls from IceWM without prompting for a password.
 cat << 'EOF' > /mnt/etc/sudoers.d/chris-power
-chris ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff, /usr/bin/systemctl reboot, /usr/bin/poweroff, /usr/bin/reboot, /usr/bin/shutdown, /usr/bin/loginctl poweroff, /usr/bin/loginctl reboot
+chris ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff, /usr/bin/systemctl reboot, /usr/bin/poweroff, /usr/bin/reboot, /usr/bin/shutdown, /usr/bin/loginctl poweroff, /usr/bin/loginctl reboot, /usr/local/sbin/druidhtpc-slot-update
 EOF
 chmod 0440 /mnt/etc/sudoers.d/chris-power
 
 # Do not set a default password in automation.
 echo "Post-install action required: set the chris password with: arch-chroot /mnt passwd chris"
 
-echo "=== [6/14] Installing Staged Package Set ==="
+echo "=== [6/15] Installing Staged Package Set ==="
 
 # Copy all staged package artifacts into the target and install them there.
 mkdir -p /mnt/root/packages
@@ -166,13 +176,15 @@ echo "Installed ${#target_packages[@]} staged package(s) from ${PACKAGE_STAGING_
 arch-chroot /mnt systemctl enable NetworkManager
 
 
-echo "=== [7/14] Deploying systemd-boot Configurations ==="
+echo "=== [7/15] Deploying systemd-boot Configurations ==="
 # Initialize systemd-boot inside the ESP partition
 arch-chroot /mnt bootctl --path=/boot install
 
 # Extract persistent PARTUUID strings directly from blkid evaluations
 PARTUUID_A=$(blkid -s PARTUUID -o value "${PART_SLOT_A}")
 PARTUUID_B=$(blkid -s PARTUUID -o value "${PART_SLOT_B}")
+ROOT_UUID_A=$(blkid -s UUID -o value "${PART_SLOT_A}")
+ROOT_UUID_B=$(blkid -s UUID -o value "${PART_SLOT_B}")
 
 # Write out the systemd-boot entry definitions
 cat <<EOF > /mnt/boot/loader/loader.conf
@@ -203,10 +215,10 @@ EOF
 cp /mnt/boot/vmlinuz-linux /mnt/boot/vmlinuz-linux-b || true
 cp /mnt/boot/initramfs-linux.img /mnt/boot/initramfs-linux-b.img || true
 
-echo "=== [8/14] Automated Base Installation Complete ==="
+echo "=== [8/15] Automated Base Installation Complete ==="
 echo "You can now run 'arch-chroot /mnt' for additional system customization."
 
-echo "=== [9/14] Provisioning IceWM Configurations ==="
+echo "=== [9/15] Provisioning IceWM Configurations ==="
 
 # 2. Establish directory structures inside the new home mount
 CHRIS_HOME="/mnt/home/chris"
@@ -249,7 +261,7 @@ echo "User profiles, memory leak handlers, and IceWM hooks successfully staged."
 
 
 
-echo "=== [10/14] Configuring Automated Console Login for chris ==="
+echo "=== [10/15] Configuring Automated Console Login for chris ==="
 # Create the override directory for the primary virtual console (tty1)
 mkdir -p /mnt/etc/systemd/system/getty@tty1.service.d
 
@@ -260,7 +272,7 @@ ExecStart=
 ExecStart=-/sbin/agetty --autologin chris --noclear %I $TERM
 EOF
 
-echo "=== [11/14] Configuring Automated X11 Shell Initialization ==="
+echo "=== [11/15] Configuring Automated X11 Shell Initialization ==="
 # Add a conditional startx trigger once.
 if ! grep -q "kick off X11 immediately" /mnt/home/chris/.bash_profile 2>/dev/null; then
   cat << 'EOF' >> /mnt/home/chris/.bash_profile
@@ -273,7 +285,7 @@ EOF
 fi
 arch-chroot /mnt chown chris:users /home/chris/.bash_profile
 
-echo "=== [12/14] Configuring .xinitrc Startup Chain ==="
+echo "=== [12/15] Configuring .xinitrc Startup Chain ==="
 # Define the X11 launch parameters
 cat << 'EOF' > /mnt/home/chris/.xinitrc
 #!/bin/sh
@@ -294,7 +306,7 @@ chmod +x /mnt/home/chris/.xinitrc
 arch-chroot /mnt chown chris:users /home/chris/.xinitrc
 
 
-echo "=== [13/14] Automating vidtv Kernel Module Initialization ==="
+echo "=== [13/15] Automating vidtv Kernel Module Initialization ==="
 # Force the system to load the virtual DVB bridge driver on boot
 mkdir -p /mnt/etc/modules-load.d
 cat << 'EOF' > /mnt/etc/modules-load.d/vidtv.conf
@@ -302,7 +314,7 @@ cat << 'EOF' > /mnt/etc/modules-load.d/vidtv.conf
 dvb_vidtv_bridge
 EOF
 
-echo "=== [14/14] Deploying vidtv Tuning Automation Service ==="
+echo "=== [14/15] Deploying vidtv Tuning Automation Service ==="
 
 # 1. Create the systemd service file
 cat << 'EOF' > /mnt/etc/systemd/system/vidtv-provision.service
@@ -328,3 +340,24 @@ EOF
 
 # 2. Enable the service inside the change-root abstraction layer
 arch-chroot /mnt systemctl enable vidtv-provision.service
+
+echo "=== [15/15] Cloning Slot A to Slot B ==="
+if ! command -v rsync > /dev/null 2>&1; then
+  echo "The live installer requires rsync to clone Slot A to Slot B." >&2
+  exit 1
+fi
+if [[ ! -f "${SLOT_UPDATE_SOURCE}" ]]; then
+  echo "Expected slot update helper at ${SLOT_UPDATE_SOURCE}" >&2
+  exit 1
+fi
+
+install -Dm755 "${SLOT_UPDATE_SOURCE}" /mnt/usr/local/sbin/druidhtpc-slot-update
+
+SLOT_B_MOUNT="$(mktemp -d /tmp/druidhtpc-slot-b.XXXXXX)"
+mount "${PART_SLOT_B}" "${SLOT_B_MOUNT}"
+rsync -aHAXx --delete --numeric-ids /mnt/ "${SLOT_B_MOUNT}/"
+sed -i "s#UUID=${ROOT_UUID_A}#UUID=${ROOT_UUID_B}#" "${SLOT_B_MOUNT}/etc/fstab"
+sync
+umount "${SLOT_B_MOUNT}"
+rmdir "${SLOT_B_MOUNT}"
+echo "Slot B is now a root-filesystem clone of Slot A."

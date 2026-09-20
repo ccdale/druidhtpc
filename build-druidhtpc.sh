@@ -30,6 +30,7 @@ mkdir -p "${HOST_VM_WORK_DIR}" "${HOST_WORK_SHARE_DIR}/packages"
 
 # Stage installer files in a dedicated shared workspace to avoid touching source-tree ownership.
 install -m 0755 "${SCRIPT_DIR}/druidhtpc-arch-setup.sh" "${HOST_VM_WORK_DIR}/druidhtpc-arch-setup.sh"
+install -m 0755 "${SCRIPT_DIR}/druidhtpc-slot-update" "${HOST_VM_WORK_DIR}/druidhtpc-slot-update"
 
 # --- AUTOMATED CLEANUP / ITERATION LOOP ---
 # If the VM exists from a previous test run, wipe it out completely to ensure a clean state

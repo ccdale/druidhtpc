@@ -6,6 +6,7 @@ Automated Arch-based HTPC build workflow with A/B root slots, shared home/data l
 
 - `build-druidhtpc.sh`: host-side VM provisioning (libvirt/QEMU + SPICE + virtiofs shared work directory).
 - `druidhtpc-arch-setup.sh`: guest-side installer script run from the Arch live environment.
+- `druidhtpc-slot-update`: installed root helper that clones the active slot and updates the inactive slot.
 - `druidmedia-htpc-build.md`: end-to-end build/run workflow for host and guest.
 - `druidhtpc-dvbstreamer-build.md`: clean Arch container/chroot package build instructions for `dvbstreamer-t2`.
 
@@ -21,6 +22,16 @@ Automated Arch-based HTPC build workflow with A/B root slots, shared home/data l
 
 - The installer defaults to package staging at guest `/work/packages` (host `work/packages/`).
 - No default user password is set by automation; set one post-install with `arch-chroot /mnt passwd chris`.
+
+## Updating the inactive slot
+
+From a booted Slot A or Slot B system, run:
+
+```bash
+sudo druidhtpc-slot-update
+```
+
+The command detects the active root, clones it to the inactive slot, corrects the cloned root UUID, runs `pacman -Syu` inside the inactive slot, and publishes that slot's kernel and initramfs to the shared ESP. Reboot and select the updated slot from the systemd-boot menu to test it. Additional arguments are passed to `pacman`, for example `sudo druidhtpc-slot-update --noconfirm`.
 
 ## License
 
