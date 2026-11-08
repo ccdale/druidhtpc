@@ -79,23 +79,71 @@ virt-install \
   --cpu host-passthrough \
   --boot uefi \
   --os-variant=archlinux \
-  --disk path="${OS_SSD_PATH}",format=qcow2,bus=sata,cache=none \
+  --disk path="${OS_SSD_PATH}",format=qcow2,bus=sata,cache=none,boot.order=2 \
   --disk path="${DATA_HDD_PATH}",format=qcow2,bus=sata,cache=none \
+  --disk path="${ARCH_ISO}",device=cdrom,bus=sata,boot.order=1 \
   --filesystem source="${HOST_WORK_SHARE_DIR}",target=work,driver.type=virtiofs \
-  --cdrom "${ARCH_ISO}" \
   "${NETWORK_ARG[@]}" \
   --graphics spice,listen=127.0.0.1 \
   --channel spicevmc \
   --noautoconsole
+# Execute virt-install against the user-space session daemon
+# virt-install \
+#   --connect qemu:///session \
+#   --name="${VM_NAME}" \
+#   --ram="${RAM_MB}" \
+#   --memorybacking access.mode=shared \
+#   --vcpus="${VCPUS}" \
+#   --cpu host-passthrough \
+#   --boot uefi \
+#   --os-variant=archlinux \
+#   --disk path="${OS_SSD_PATH}",format=qcow2,bus=sata,cache=none \
+#   --disk path="${DATA_HDD_PATH}",format=qcow2,bus=sata,cache=none \
+#   --filesystem source="${HOST_WORK_SHARE_DIR}",target=work,driver.type=virtiofs \
+#   --cdrom "${ARCH_ISO}" \
+#   "${NETWORK_ARG[@]}" \
+#   --graphics spice,listen=127.0.0.1 \
+#   --channel spicevmc \
+#   --noautoconsole
 
 echo "VM '${VM_NAME}' successfully defined and started background initialization."
 
-echo "=== [4/4] Launching SPICE Graphical Interface ==="
+echo "=== [4/4] Launching SPICE Graphical Interface & Auto-Eject Hook ==="
 echo "Connecting Virt-Viewer to simulate GNOME Boxes display rendering..."
 echo "Press Ctrl+Alt+R inside the viewer to release your mouse cursor if trapped."
 
-# Launch Virt-Viewer over SPICE to handle the interactive graphical configuration
-# It waits dynamically for the VM subsystem to come completely online
+# Launch Virt-Viewer over SPICE in the background
 virt-viewer --connect qemu:///session --wait "${VM_NAME}" &
 
+# --- AUTOMATED ISO EJECT HOOK ---
+echo "Waiting for installer completion (VM shutdown/reboot)..."
+
+# Poll virsh state until the VM is no longer running
+while virsh --connect qemu:///session domstate "${VM_NAME}" 2>/dev/null | grep -q "running"; do
+    sleep 3
+done
+
+echo "Installer finished! Ejecting Arch ISO from virtual CD-ROM drive..."
+
+# Detect the target device name for the CD-ROM drive (e.g., sda or sdc)
+CDROM_DEV=$(virsh --connect qemu:///session domblklist "${VM_NAME}" | grep -E '\.iso$' | awk '{print $1}')
+
+if [ -n "${CDROM_DEV}" ]; then
+    virsh --connect qemu:///session change-media "${VM_NAME}" "${CDROM_DEV}" --eject --config >/dev/null
+    echo "Successfully ejected ISO from target '${CDROM_DEV}'."
+else
+    echo "No attached ISO found to eject."
+fi
+
 echo "=== Build script execution completed ==="
+
+# echo "=== [4/4] Launching SPICE Graphical Interface ==="
+# echo "Connecting Virt-Viewer to simulate GNOME Boxes display rendering..."
+# echo "Press Ctrl+Alt+R inside the viewer to release your mouse cursor if trapped."
+# 
+# # Launch Virt-Viewer over SPICE to handle the interactive graphical configuration
+# # It waits dynamically for the VM subsystem to come completely online
+# virt-viewer --connect qemu:///session --wait "${VM_NAME}" &
+# 
+# echo "=== Build script execution completed ==="
+# 

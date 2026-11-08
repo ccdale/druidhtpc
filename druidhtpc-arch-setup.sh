@@ -107,7 +107,9 @@ pacstrap -K /mnt \
   networkmanager \
   python \
   intel-ucode \
-  amd-ucode \
+  intel-media-driver \
+  libva-utils \
+  mesa \
   uv \
   xorg-server \
   xorg-xinit \
@@ -197,7 +199,6 @@ cat <<EOF > /mnt/boot/loader/entries/slot-a.conf
 title   Arch Linux (Slot A - Active)
 linux   /vmlinuz-linux
 initrd  /intel-ucode.img
-initrd  /amd-ucode.img
 initrd  /initramfs-linux.img
 options root=PARTUUID=${PARTUUID_A} rw quiet
 EOF
@@ -206,7 +207,6 @@ cat <<EOF > /mnt/boot/loader/entries/slot-b.conf
 title   Arch Linux (Slot B - Fallback/Testing)
 linux   /vmlinuz-linux-b
 initrd  /intel-ucode.img
-initrd  /amd-ucode.img
 initrd  /initramfs-linux-b.img
 options root=PARTUUID=${PARTUUID_B} rw quiet
 EOF
