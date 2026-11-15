@@ -8,6 +8,7 @@ Automated Arch-based HTPC build workflow with A/B root slots, shared home/data l
 - `druidhtpc-arch-setup.sh`: guest-side installer script run from the Arch live environment.
 - `druidhtpc-slot-update`: installed root helper that clones the active slot and updates the inactive slot.
 - `druidmedia-htpc-build.md`: end-to-end build/run workflow for host and guest.
+- `druidmedia-physical-build.md`: USB preparation and physical media-server installation.
 - `druidhtpc-dvbstreamer-build.md`: clean Arch container/chroot package build instructions for `dvbstreamer-t2`.
 
 ## High-level workflow
@@ -20,6 +21,7 @@ Automated Arch-based HTPC build workflow with A/B root slots, shared home/data l
 
 ## Notes
 
+- The installer selects the physical OS and recording disks by size (240–275 GB and 480–550 GB respectively), or the configured VM disks by size. Verify the displayed disk identities and confirm before either disk is erased.
 - The installer defaults to package staging at guest `/work/packages` (host `work/packages/`).
 - The installer creates `chris` with UID 1000 and primary group `chris` with GID 1000, matching ownership in the Debian media-server backup. Conflicting existing IDs cause installation to stop rather than renumber accounts. Both root slots retain these IDs.
 - The installer adds the `chris@stone` SSH public key to Chris's `authorized_keys`, installs OpenSSH, and enables `sshd` at boot.

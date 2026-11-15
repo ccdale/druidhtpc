@@ -7,9 +7,6 @@
 
 set -euo pipefail
 
-# --- TARGET DISK CONFIGURATION ---
-TARGET_DISK="/dev/sda"
-RECORDING_DISK="/dev/sdb"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -n "${PACKAGE_STAGING_DIR:-}" ]]; then
   PACKAGE_STAGING_DIR="${PACKAGE_STAGING_DIR}"
@@ -65,12 +62,81 @@ restore_media_backup() (
 partition_path() {
   local disk="$1"
   local index="$2"
-  if [[ "$disk" =~ (nvme|mmcblk) ]]; then
+  if [[ "$disk" =~ [0-9]$ ]]; then
     printf "%sp%s" "$disk" "$index"
   else
     printf "%s%s" "$disk" "$index"
   fi
 }
+
+detect_target_disks() {
+  local disk_list disk size type removable readonly transport mounted
+  local -a physical_os=() physical_recording=() vm_os=() vm_recording=()
+
+  if ! disk_list="$(lsblk -b -d -n -p -r -o PATH,SIZE,TYPE,RM,RO,TRAN)"; then
+    echo "Unable to enumerate disks; refusing to install." >&2
+    return 1
+  fi
+  while read -r disk size type removable readonly transport; do
+    [[ "${type}" == disk && "${removable}" == 0 && "${readonly}" == 0 ]] || continue
+    [[ "${transport}" != usb ]] || continue
+    [[ "${size}" =~ ^[0-9]+$ ]] || continue
+    if (( size >= 240000000000 && size <= 275000000000 )); then
+      physical_os+=("${disk}")
+    elif (( size >= 480000000000 && size <= 550000000000 )); then
+      physical_recording+=("${disk}")
+    elif (( size == 64 * 1024 * 1024 * 1024 )); then
+      vm_os+=("${disk}")
+    elif (( size == 40 * 1024 * 1024 * 1024 )); then
+      vm_recording+=("${disk}")
+    fi
+  done <<< "${disk_list}"
+
+  if (( ${#physical_os[@]} == 1 && ${#physical_recording[@]} == 1 )); then
+    TARGET_DISK="${physical_os[0]}"
+    RECORDING_DISK="${physical_recording[0]}"
+    echo "Detected physical disk sizes."
+  elif (( ${#physical_os[@]} == 0 && ${#physical_recording[@]} == 0 )) &&
+       systemd-detect-virt --vm --quiet &&
+       (( ${#vm_os[@]} == 1 && ${#vm_recording[@]} == 1 )); then
+    TARGET_DISK="${vm_os[0]}"
+    RECORDING_DISK="${vm_recording[0]}"
+    echo "Detected the 64 GiB / 40 GiB VM disk sizes."
+  else
+    echo "Could not uniquely identify both disks; refusing to install." >&2
+    echo "Expected one 240–275 GB OS disk and one 480–550 GB recording disk, or the configured VM disks." >&2
+    lsblk -o NAME,SIZE,MODEL,SERIAL,TRAN,RM,RO,MOUNTPOINTS >&2
+    return 1
+  fi
+
+  for disk in "${TARGET_DISK}" "${RECORDING_DISK}"; do
+    if ! mounted="$(lsblk -n -r -p -o MOUNTPOINTS "${disk}")"; then
+      echo "Unable to check mounts on ${disk}; refusing to install." >&2
+      return 1
+    fi
+    if [[ -n "${mounted//[[:space:]]/}" ]]; then
+      echo "${disk} or one of its descendants is mounted; refusing to install." >&2
+      return 1
+    fi
+  done
+
+  echo "WARNING: the following disks and all their contents will be erased:"
+  echo "OS disk: ${TARGET_DISK}"
+  echo "Recording disk: ${RECORDING_DISK}"
+  lsblk -d -o NAME,SIZE,MODEL,SERIAL,TRAN "${TARGET_DISK}" "${RECORDING_DISK}"
+  echo "Verify the model and serial numbers independently before continuing."
+  local confirmation
+  read -r -p "Type ERASE to confirm: " confirmation || {
+    echo "Confirmation not received; refusing to install." >&2
+    return 1
+  }
+  if [[ "${confirmation}" != ERASE ]]; then
+    echo "Confirmation not given; refusing to install." >&2
+    return 1
+  fi
+}
+
+detect_target_disks
 
 echo "=== [1/15] Creating GPT Partition Layout (56 GB Total Required) ==="
 # Wipe existing partition signatures cleanly

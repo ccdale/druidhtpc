@@ -36,10 +36,10 @@ For the package build workflow, see `druidhtpc-dvbstreamer-build.md`.
 * a SPICE display opened with `virt-viewer`
 * a virtiofs share from host `$HOME/src/druidhtpc/work` to guest `/work`
 
-This matches the installer's expectation that the guest will see:
+The installer detects the VM's disks by size, independent of their names:
 
-* `/dev/sda` as the OS SSD
-* `/dev/sdb` as the recording HDD
+* 64 GiB for the OS SSD
+* 40 GiB for the recording HDD
 
 ## 3. Build and boot the VM
 
@@ -72,10 +72,10 @@ Confirm the expected disks are present:
 lsblk
 ```
 
-You should see:
+You should see the two virtual disks (device names may vary):
 
-* `/dev/sda` as the 64 GB OS disk
-* `/dev/sdb` as the 40 GB recording disk
+* a 64 GiB OS disk
+* a 40 GiB recording disk
 
 ## 5. Mount the shared /work directory inside the VM
 
@@ -107,10 +107,12 @@ chmod +x druidhtpc-arch-setup.sh
 
 To also restore the NAS backup's application config/data, use `RESTORE_MEDIA_BACKUP=1 ./druidhtpc-arch-setup.sh` instead. See [backup restore details](README.md#restoring-the-media-server-backup). Publish `ccatv` to `ccapkgs` before installing; the installer registers this repository and installs the package even without a restore.
 
+The installer displays the selected disks and requires `ERASE` confirmation before partitioning. Verify both disk identities before confirming; it stops on ambiguous sizes or mounted disks.
+
 The installer will:
 
-1. partition `/dev/sda` into ESP, Slot A, Slot B, and shared home
-2. partition `/dev/sdb` into one recording-data partition
+1. partition the selected OS disk into ESP, Slot A, Slot B, and shared home
+2. partition the selected recording disk into one recording-data partition
 3. format and mount the filesystems
 4. `pacstrap` the Arch base system and UI packages
 5. create the `chris` user with UID 1000 and primary group `chris` with GID 1000, configure the `chris@stone` SSH key, and enable `sshd` at boot
@@ -173,7 +175,7 @@ That confirms the A/B root swap is working while shared user data and recording 
 * this document is for the scripted VM path, not the older fully-manual Arch install path
 * `build-druidhtpc.sh` does not install Arch by itself; it only creates and boots the VM
 * `druidhtpc-arch-setup.sh` is the installer that must be run from inside the VM
-* the current installer assumes `/dev/sda` and `/dev/sdb`, which matches the VM builder's SATA disk layout
+* the installer detects the VM's 64 GiB OS and 40 GiB recording disks by size and requires confirmation before erasing them
 * vidtv setup is provisioned automatically, but it still depends on the guest kernel actually shipping `dvb_vidtv_bridge`
 
 ## 10. Fast rerun loop
