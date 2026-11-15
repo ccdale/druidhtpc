@@ -21,7 +21,29 @@ Automated Arch-based HTPC build workflow with A/B root slots, shared home/data l
 ## Notes
 
 - The installer defaults to package staging at guest `/work/packages` (host `work/packages/`).
+- The installer creates `chris` with UID 1000 and primary group `chris` with GID 1000, matching ownership in the Debian media-server backup. Conflicting existing IDs cause installation to stop rather than renumber accounts. Both root slots retain these IDs.
+- The installer adds the `chris@stone` SSH public key to Chris's `authorized_keys`, installs OpenSSH, and enables `sshd` at boot.
 - No default user password is set by automation; set one post-install with `arch-chroot /mnt passwd chris`.
+- Both slots mount `192.168.50.96:/volume1/druidshare` at `/mnt/nas` on demand using NFSv3 and systemd automount. The installer includes `nfs-utils`; an unavailable NAS does not block boot. Accessing the share triggers the mount, and hard NFS mounts retry interrupted I/O rather than risking data corruption. Check it after boot with `ls /mnt/nas` and `findmnt /mnt/nas`.
+- The installer registers the `ccapkgs` repository using its documented `Optional TrustAll` signature policy and installs `ccatv`. Publish the package and its dependencies to the repository before building; installation stops if they cannot be installed.
+
+## Restoring the media-server backup
+
+Restore is disabled by default. To import the verified Debian backup during installation, run inside the live guest:
+
+```bash
+RESTORE_MEDIA_BACKUP=1 /work/druidhtpc/druidhtpc-arch-setup.sh
+```
+
+The installer temporarily mounts the NAS read-only and verifies `backups/druidmedia-2026-11-15-111810.tar.gz` against its `.sha256` file before extracting directly into `/home/chris`, without copying the archive to local disk. The temporary mount is removed on completion or failure.
+
+It restores Kodi, DVBStreamer and comskip settings, ccatv config and SQLite database files, and the Schedules Direct token cache, preserving numeric ownership and permissions. Debian user service units and local helper scripts are omitted in favor of the Arch package. The archive contains credentials: opt in only on a trusted VM or the replacement server.
+
+ccatv services remain disabled. Before starting them, review restored NAS/recording paths, tuner adapters, and API/web settings for the new host; importing config does not adapt them automatically. Avoid running the restored recording schedule alongside the old server. Once ready, from Chris's session:
+
+```bash
+systemctl --user enable --now ccatv.service ccatv-api.service ccatv-web.service
+```
 
 ## Updating the inactive slot
 

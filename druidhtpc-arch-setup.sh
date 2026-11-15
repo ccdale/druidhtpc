@@ -20,6 +20,46 @@ else
 fi
 MIRRORLIST_SOURCE="${MIRRORLIST_SOURCE:-/work/ukmirrorlist}"
 SLOT_UPDATE_SOURCE="${SCRIPT_DIR}/druidhtpc-slot-update"
+NAS_SOURCE="192.168.50.96:/volume1/druidshare"
+RESTORE_MEDIA_BACKUP="${RESTORE_MEDIA_BACKUP:-0}"
+MEDIA_BACKUP="/mnt/nas/backups/druidmedia-2026-11-15-111810.tar.gz"
+
+if [[ "${RESTORE_MEDIA_BACKUP}" != 0 && "${RESTORE_MEDIA_BACKUP}" != 1 ]]; then
+  echo "RESTORE_MEDIA_BACKUP must be 0 or 1." >&2
+  exit 1
+fi
+
+restore_media_backup() (
+  set -euo pipefail
+  local nas_mount archive expected_digest checksum_path
+  nas_mount="$(mktemp -d /tmp/druidhtpc-nas.XXXXXX)"
+  cleanup_restore() {
+    if mountpoint -q "${nas_mount}"; then
+      umount "${nas_mount}" || return 1
+    fi
+    rmdir "${nas_mount}"
+  }
+  trap cleanup_restore EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  mount -t nfs -o ro,nosuid,nodev,noexec,vers=3,hard,timeo=900,retrans=5 \
+    "${NAS_SOURCE}" "${nas_mount}"
+  archive="${nas_mount}/${MEDIA_BACKUP#/mnt/nas/}"
+  read -r expected_digest checksum_path < "${archive}.sha256"
+  if [[ ! "${expected_digest}" =~ ^[[:xdigit:]]{64}$ || "${checksum_path}" != "${MEDIA_BACKUP}" ]]; then
+    echo "Invalid checksum file for ${MEDIA_BACKUP}." >&2
+    exit 1
+  fi
+  printf '%s  %s\n' "${expected_digest}" "${archive}" | sha256sum --check --strict -
+
+  echo "Restoring application config/data from ${MEDIA_BACKUP}."
+  tar --extract --gzip --file="${archive}" --directory=/mnt/home/chris \
+    --numeric-owner --same-owner --same-permissions --wildcards --anchored \
+    -- .kodi .dvbstreamer .config/ccatv .config/dvbstreamer .config/comskip \
+    '.local/share/ccatv/ccatv.sqlite3*' \
+    .local/state/ccatv/schedules_direct_token_cache.json
+)
 
 # Resolve partition names for both sdX and nvme/mmc devices.
 partition_path() {
@@ -105,6 +145,8 @@ pacstrap -K /mnt \
   linux \
   linux-firmware \
   networkmanager \
+  nfs-utils \
+  openssh \
   python \
   intel-ucode \
   intel-media-driver \
@@ -127,10 +169,42 @@ pacstrap -K /mnt \
 # Generate explicit fstab file using persistent unique hardware UUID identifiers
 genfstab -U /mnt > /mnt/etc/fstab
 
+mkdir -p /mnt/mnt/nas
+cat << EOF >> /mnt/etc/fstab
+
+# Mount the NAS on demand without requiring it to be available at boot.
+${NAS_SOURCE} /mnt/nas nfs rw,nosuid,nodev,_netdev,nofail,x-systemd.automount,vers=3,hard,timeo=900,retrans=5 0 0
+EOF
+
 echo "=== [5/15] Provisioning User 'chris' ==="
-if ! arch-chroot /mnt id -u chris > /dev/null 2>&1; then
-  arch-chroot /mnt useradd -m -g users -G wheel,audio,video,storage,optical -s /bin/bash chris
+if group_entry="$(arch-chroot /mnt getent group chris)"; then
+  IFS=: read -r group_name group_password group_gid group_members <<< "${group_entry}"
+  if [[ "${group_gid}" != 1000 ]]; then
+    echo "Expected group chris to have GID 1000; found ${group_gid}. Refusing to change existing ownership." >&2
+    exit 1
+  fi
+else
+  arch-chroot /mnt groupadd -g 1000 chris
 fi
+
+if chris_uid="$(arch-chroot /mnt id -u chris 2>/dev/null)"; then
+  chris_gid="$(arch-chroot /mnt id -g chris)"
+  if [[ "${chris_uid}" != 1000 || "${chris_gid}" != 1000 ]]; then
+    echo "Expected chris to have UID/GID 1000:1000; found ${chris_uid}:${chris_gid}. Refusing to change existing ownership." >&2
+    exit 1
+  fi
+else
+  arch-chroot /mnt useradd -m -u 1000 -g chris -G wheel,audio,video,storage,optical -s /bin/bash chris
+fi
+
+install -d -m 700 /mnt/home/chris/.ssh
+touch /mnt/home/chris/.ssh/authorized_keys
+chmod 600 /mnt/home/chris/.ssh/authorized_keys
+ssh_public_key='ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCm17hBhuF0ynsU1LapUg1K5EtgU69hLBj/bva0YhK7f49HuQH9ZkypChDdYiI+YSE/UK6KCELURsqsYAcA2vgeRYhaJ0cu+9gwt+QjGJ75TvrFdOc8HWLaY70v8qW7fC/QJ0en8OY6lMcuYaPhMdzHWCG5Jdwpea4NFHESrjmJYarTrjZzC2oAmS8l+dJswlSD0oxVsfwowXvrqrACULcQhLcW+wtA28XMM/WUyTJDJHEMyH3Fjt7P3blcUd/kNLFt1/mgrXOCU5Un5N8i8/Vsfr9ppRN1fjq4PikPPv9eK77WHEdE0dX8vdxctZjhQOVXklvuslufMrLj5gZO7BNf chris@stone'
+if ! grep -qxF -- "${ssh_public_key}" /mnt/home/chris/.ssh/authorized_keys; then
+  printf '%s\n' "${ssh_public_key}" >> /mnt/home/chris/.ssh/authorized_keys
+fi
+arch-chroot /mnt chown -R chris:chris /home/chris/.ssh
 
 # Allow clean power controls from IceWM without prompting for a password.
 cat << 'EOF' > /mnt/etc/sudoers.d/chris-power
@@ -141,7 +215,20 @@ chmod 0440 /mnt/etc/sudoers.d/chris-power
 # Do not set a default password in automation.
 echo "Post-install action required: set the chris password with: arch-chroot /mnt passwd chris"
 
+if [[ "${RESTORE_MEDIA_BACKUP}" == 1 ]]; then
+  pacman -Sy --needed --noconfirm nfs-utils
+  restore_media_backup
+fi
+
 echo "=== [6/15] Installing Staged Package Set ==="
+
+cat << 'EOF' >> /mnt/etc/pacman.conf
+
+[ccapkgs]
+SigLevel = Optional TrustAll
+Server = https://raw.github.com/ccdale/$repo/main/any
+EOF
+arch-chroot /mnt pacman -Syu --noconfirm ccatv
 
 # Copy all staged package artifacts into the target and install them there.
 mkdir -p /mnt/root/packages
@@ -174,8 +261,11 @@ done
 arch-chroot /mnt pacman -U --noconfirm "${target_packages[@]}"
 echo "Installed ${#target_packages[@]} staged package(s) from ${PACKAGE_STAGING_DIR}."
 
-# Bring up standard LAN networking for ccatv's Flask app and other services.
-arch-chroot /mnt systemctl enable NetworkManager
+arch-chroot /mnt systemctl --global disable ccatv.service ccatv-api.service ccatv-web.service
+echo "ccatv services are installed but disabled; review restored paths/tuner settings before enabling them."
+
+# Bring up standard LAN networking and SSH for remote access.
+arch-chroot /mnt systemctl enable NetworkManager NetworkManager-wait-online.service sshd.service
 
 
 echo "=== [7/15] Deploying systemd-boot Configurations ==="
@@ -256,7 +346,7 @@ RebootCommand="sudo /usr/bin/systemctl reboot"
 EOF
 
 # 5. Fix permissions so the user owns their own configuration footprint
-arch-chroot /mnt chown -R chris:users /home/chris
+arch-chroot /mnt chown -R chris:chris /home/chris
 echo "User profiles, memory leak handlers, and IceWM hooks successfully staged."
 
 
@@ -283,7 +373,7 @@ if [[ -z $DISPLAY && $(tty) == /dev/tty1 ]]; then
 fi
 EOF
 fi
-arch-chroot /mnt chown chris:users /home/chris/.bash_profile
+arch-chroot /mnt chown chris:chris /home/chris/.bash_profile
 
 echo "=== [12/15] Configuring .xinitrc Startup Chain ==="
 # Define the X11 launch parameters
@@ -303,7 +393,7 @@ exec icewm-session
 EOF
 
 chmod +x /mnt/home/chris/.xinitrc
-arch-chroot /mnt chown chris:users /home/chris/.xinitrc
+arch-chroot /mnt chown chris:chris /home/chris/.xinitrc
 
 
 echo "=== [13/15] Automating vidtv Kernel Module Initialization ==="
@@ -326,7 +416,7 @@ Requires=systemd-modules-load.service
 [Service]
 Type=oneshot
 User=chris
-Group=users
+Group=chris
 RemainAfterExit=yes
 WorkingDirectory=/home/chris
 ExecStartPre=/usr/bin/timeout 30 /usr/bin/bash -c 'until [ -d /dev/dvb/adapter0 ]; do sleep 0.5; done'

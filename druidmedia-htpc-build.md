@@ -105,16 +105,20 @@ chmod +x druidhtpc-arch-setup.sh
 ./druidhtpc-arch-setup.sh
 ```
 
+To also restore the NAS backup's application config/data, use `RESTORE_MEDIA_BACKUP=1 ./druidhtpc-arch-setup.sh` instead. See [backup restore details](README.md#restoring-the-media-server-backup). Publish `ccatv` to `ccapkgs` before installing; the installer registers this repository and installs the package even without a restore.
+
 The installer will:
 
 1. partition `/dev/sda` into ESP, Slot A, Slot B, and shared home
 2. partition `/dev/sdb` into one recording-data partition
 3. format and mount the filesystems
 4. `pacstrap` the Arch base system and UI packages
-5. create the `chris` user
+5. create the `chris` user with UID 1000 and primary group `chris` with GID 1000, configure the `chris@stone` SSH key, and enable `sshd` at boot
 6. install the staged `dvbstreamer-t2` package with `pacman -U`
 7. configure systemd-boot entries for Slot A and Slot B
 8. configure IceWM autologin, X startup, Kodi toggle script, and vidtv helpers
+9. configure on-demand NFS mounting of `192.168.50.96:/volume1/druidshare` at `/mnt/nas` in both slots
+10. install `ccatv` from `ccapkgs`, leaving its user services disabled pending configuration review
 
 When `/work` is mounted, the installer bind-mounts `/work/pacman-cache` to `/mnt/var/cache/pacman/pkg` before `pacstrap`, so downloaded package archives are reused on future rebuilds.
 
@@ -183,4 +187,3 @@ When iterating:
 5. rerun `./druidhtpc-arch-setup.sh` inside the fresh VM
 
 That gives you a clean repeatable test loop for the eventual physical HTPC install.
-
