@@ -9,6 +9,7 @@ Automated Arch-based HTPC build workflow with A/B root slots, shared home/data l
 - `druidhtpc-slot-update`: installed root helper that clones the active slot and updates the inactive slot.
 - `druidmedia-htpc-build.md`: end-to-end build/run workflow for host and guest.
 - `druidmedia-physical-build.md`: USB preparation and physical media-server installation.
+- [live-steps.md](live-steps.md): pickup checklist for staging the prepared USB and installing the physical PC.
 - `druidhtpc-dvbstreamer-build.md`: clean Arch container/chroot package build instructions for `dvbstreamer-t2`.
 
 ## High-level workflow
