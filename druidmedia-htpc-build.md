@@ -11,7 +11,7 @@ The split is:
 
 Before starting, make sure the following are true on the host:
 
-* `build-druidhtpc.sh` points at a valid Arch ISO path.
+* The Arch ISO is available at `/mnt/nas/iso/archlinux-2026.11.01-x86_64.iso`, or set `ARCH_ISO` to another readable ISO.
 * libvirt/QEMU tooling is installed and working for `qemu:///session`.
 * required packages are installed: `libvirt` (provides `virsh`), `virt-install`, `virt-viewer`, and `qemu-img` (from QEMU tools)
 * `$HOME/src/druidhtpc/work/packages/` exists on the host and contains exactly one `dvbstreamer-t2` package
@@ -56,6 +56,10 @@ This will:
 2. recreate both virtual disks
 3. boot the Arch ISO under libvirt
 4. open the VM console with `virt-viewer`
+
+**This deletes the existing test VM and both of its virtual disks.** Back up
+anything needed from them before running it. To use a different ISO, run
+`ARCH_ISO=/path/to/archlinux.iso ./build-druidhtpc.sh`.
 
 ## 4. Inside the Arch live environment
 

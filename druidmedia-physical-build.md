@@ -38,7 +38,7 @@ Measurements on the preparation host on 15 November 2026:
 
 | Item | Size |
 | --- | ---: |
-| Arch ISO at `~/Downloads/archlinux-x86_64.iso` | 1,583,022,080 bytes, about 1.47 GiB |
+| Arch ISO at `/mnt/nas/iso/archlinux-2026.11.01-x86_64.iso` | 1,317,568,512 bytes, about 1.23 GiB |
 | `work/pacman-cache` | at least 4,624,197,082 bytes, about 4.31 GiB |
 | `work/packages` | about 628 KiB |
 | Ventoy EFI partition | 32 MB |
@@ -46,8 +46,8 @@ Measurements on the preparation host on 15 November 2026:
 The cache measurement is a **lower bound**: some `download-*` directories
 were not readable by the measuring user. Cache contents can also change during
 a build. Check the latest size with `sudo du -sh ~/src/druidhtpc/work/pacman-cache`
-after the VM has finished. The ISO and readable cache alone total about
-5.78 GiB, before filesystem overhead and future downloads.
+after the VM has finished. The ISO and previously measured readable cache
+alone total about 5.54 GiB, before filesystem overhead and future downloads.
 
 Use Ventoy's standard two partitions, plus an ext4 work partition in reserved
 space at the end:
@@ -121,7 +121,7 @@ partition 3.
 
    ```bash
    cd ~/src/druidhtpc
-   sudo cp ~/Downloads/archlinux-x86_64.iso /mnt/ventoy-usb/
+   sudo cp /mnt/nas/iso/archlinux-2026.11.01-x86_64.iso /mnt/ventoy-usb/
    sudo mkdir -p /mnt/druidwork-usb/{druidhtpc,packages,pacman-cache}
    sudo install -m 755 druidhtpc-arch-setup.sh druidhtpc-slot-update /mnt/druidwork-usb/druidhtpc/
    sudo install -m 644 work/ukmirrorlist /mnt/druidwork-usb/ukmirrorlist

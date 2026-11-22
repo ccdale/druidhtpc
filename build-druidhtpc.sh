@@ -14,7 +14,7 @@ VM_NAME="druidhtpc-test-env"
 RAM_MB=4096
 VCPUS=2
 DISK_DIR="${HOME}/.local/share/gnome-boxes/images" # Matches GNOME Boxes default storage path
-ARCH_ISO="${HOME}/Downloads/archlinux-x86_64.iso" # Update this path to your Arch ISO
+ARCH_ISO="${ARCH_ISO:-/mnt/nas/iso/archlinux-2026.11.01-x86_64.iso}"
 HOST_WORK_SHARE_DIR="${SCRIPT_DIR}/work"
 HOST_VM_WORK_DIR="${HOST_WORK_SHARE_DIR}/druidhtpc"
 
@@ -23,6 +23,11 @@ OS_SSD_PATH="${DISK_DIR}/${VM_NAME}-os-ssd.qcow2"
 OS_SSD_SIZE=64 # Leaves enough room for 1GB ESP + 15GB Slot A + 15GB Slot B + shared home
 DATA_HDD_PATH="${DISK_DIR}/${VM_NAME}-data-hdd.qcow2"
 DATA_HDD_SIZE=40 # 40GB virtual drive to test the raw TS stream buffer allocations
+
+if [[ ! -r "${ARCH_ISO}" || ! -f "${ARCH_ISO}" ]]; then
+    echo "Arch ISO not found or unreadable: ${ARCH_ISO}" >&2
+    exit 1
+fi
 
 echo "=== [1/4] Preparing Host Storage & Environment ==="
 mkdir -p "${DISK_DIR}"

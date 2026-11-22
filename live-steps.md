@@ -5,21 +5,22 @@ partitioning details, see [the physical build guide](druidmedia-physical-build.m
 
 ## 1. Starting point
 
-USB layout checked on 16 November 2026:
+USB layout:
 
 - About 31 GB total (28.9 GiB).
-- `Ventoy`: exFAT, with `archlinux-x86_64.iso` already copied.
+- `Ventoy`: exFAT, with `archlinux-2026.11.01-x86_64.iso` copied alongside the older ISO.
 - `VTOYEFI`: Ventoy's 32 MiB boot partition; leave it alone.
 - `DRUIDWORK`: 12 GiB ext4 partition, now created and writable.
-- The USB ISO's SHA-256 matched the source ISO. This checks the copy, not
-  the publisher's signature.
+- The new ISO's SHA-256 matched the supplied checksum, its signature verified
+  against the host pacman keyring, and the USB copy's SHA-256 matched.
 
 Do not repartition the USB again. The remaining preparation is refreshing the
 package cache and copying the build files.
 
 ## 2. Refresh the cache using the VM
 
-On the preparation host:
+On the preparation host, after saving anything needed from the old test VM
+and its disks (the builder deletes both):
 
 ```bash
 cd ~/src/druidhtpc
