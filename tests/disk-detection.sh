@@ -57,6 +57,9 @@ run_case() {
 
 physical=$'/dev/sda 500107862016 disk 0 0 sata\n/dev/nvme0n1 250059350016 disk 0 0 nvme\n/dev/sdb 250059350016 disk 1 0 usb'
 export DISKS="${physical}"
+export MEDIA_BACKUP=/mnt/nas/backups/../../outside.tar.gz
+run_case "unsafe backup path rejected before disk operations" ERASE 1 'MEDIA_BACKUP must be' no
+export MEDIA_BACKUP=/mnt/nas/backups/druidmedia-2026-11-22-123456-test.tar.gz
 run_case "physical disk order and USB exclusion" ERASE 77 'OS disk: /dev/nvme0n1' yes
 grep -qF -- '-f /dev/nvme0n1' "${DESTRUCTIVE_LOG}"
 grep -qF 'Recording disk: /dev/sda' "${tmp}/output"

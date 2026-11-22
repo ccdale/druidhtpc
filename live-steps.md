@@ -70,8 +70,10 @@ Make sure `ccatv` and its dependencies are available from `ccapkgs`; the cache
 does not make this an offline installation.
 
 ```bash
-sudo mkdir -p "$USB_WORK"/{druidhtpc,packages,pacman-cache}
-sudo install -m 755 druidhtpc-arch-setup.sh druidhtpc-slot-update "$USB_WORK/druidhtpc/"
+sudo mkdir -p "$USB_WORK"/{druidhtpc/tests,packages,pacman-cache}
+sudo install -m 755 backup-druidmedia.sh druidhtpc-arch-setup.sh druidhtpc-slot-update "$USB_WORK/druidhtpc/"
+sudo install -m 644 tests/backup-druidmedia.py tests/disk-detection.sh "$USB_WORK/druidhtpc/tests/"
+sudo install -m 644 README.md druidmedia-physical-build.md "$USB_WORK/"
 sudo install -m 644 work/ukmirrorlist "$USB_WORK/ukmirrorlist"
 sudo install -m 644 live-steps.md "$USB_WORK/live-steps.md"
 sudo rsync -rt work/packages/ "$USB_WORK/packages/"
@@ -89,11 +91,15 @@ Expected contents at the root of `DRUIDWORK`:
 
 ```text
 druidhtpc/
+  backup-druidmedia.sh
   druidhtpc-arch-setup.sh
   druidhtpc-slot-update
+  tests/
 packages/
 pacman-cache/
 ukmirrorlist
+README.md
+druidmedia-physical-build.md
 live-steps.md
 ```
 
@@ -147,19 +153,24 @@ fails, install it:
 pacman -Sy --needed rsync
 ```
 
-For a restore, test NAS access before starting the destructive installation:
+Test NAS access before starting the destructive installation, even if not
+restoring a backup. Run as root in the live environment:
 
 ```bash
 pacman -Sy --needed nfs-utils
 mkdir -p /mnt/nas-test
 mount -t nfs -o ro,vers=3 192.168.50.96:/volume1/druidshare /mnt/nas-test
-ls -l /mnt/nas-test/backups/druidmedia-2026-11-15-111810.tar.gz*
+findmnt /mnt/nas-test
+ls -l /mnt/nas-test/backups/druidmedia-*.tar.gz*
 umount /mnt/nas-test
 ```
 
-Resolve any mount failure before continuing. Review the
+Stop if the mount fails or `findmnt` does not show the NAS export; do not
+proceed with the listing or unmount commands in that case. Resolve the
+network or NAS access issue before continuing. If restoring, review the
 [backup restore details](README.md#restoring-the-media-server-backup): the
-installer restores this specific backup and validates its checksum.
+installer defaults to the 15 November backup, or accepts a newer `MEDIA_BACKUP`
+path. It validates the corresponding checksum before restoring.
 
 ## 6. Install: destructive step
 
@@ -168,6 +179,13 @@ Choose **one** command, depending on whether the backup should be restored:
 ```bash
 cd /work/druidhtpc
 RESTORE_MEDIA_BACKUP=1 ./druidhtpc-arch-setup.sh
+```
+
+For a newer backup, set `MEDIA_BACKUP` to the path printed by the backup script:
+
+```bash
+RESTORE_MEDIA_BACKUP=1 MEDIA_BACKUP=/mnt/nas/backups/druidmedia-REPLACE.tar.gz \
+  ./druidhtpc-arch-setup.sh
 ```
 
 Or, for a clean installation without restored application data:
@@ -240,6 +258,26 @@ ls -l /dev/dvb/
 - [ ] Reboot, choose Slot B, and repeat mount/login checks.
 - [ ] Review restored recording paths, tuner settings and API/web settings.
 - [ ] Stop the old server's recording services before enabling the replacement.
+
+Verify NAS read/write access from a terminal logged in as `chris`, not root.
+The first command triggers the on-demand mount; confirm `findmnt` reports the
+NAS NFS export before running the write test:
+
+```bash
+ls /mnt/nas/backups
+findmnt -T /mnt/nas
+(
+  set -e
+  tmp=$(mktemp /mnt/nas/backups/.druidhtpc-check.XXXXXXXX)
+  trap 'rm -f -- "$tmp"' EXIT
+  echo test > "$tmp"
+  grep -qx test "$tmp"
+  echo "NAS read/write OK"
+)
+```
+
+The test creates and removes only its own temporary file. Repeat it in Slot B.
+If the NAS is unavailable, the hard mount can wait while retrying I/O.
 
 Only when ready, run from Chris's logged-in session:
 

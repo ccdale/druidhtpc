@@ -7,6 +7,7 @@ Automated Arch-based HTPC build workflow with A/B root slots, shared home/data l
 - `build-druidhtpc.sh`: host-side VM provisioning (libvirt/QEMU + SPICE + virtiofs shared work directory).
 - `druidhtpc-arch-setup.sh`: guest-side installer script run from the Arch live environment.
 - `druidhtpc-slot-update`: installed root helper that clones the active slot and updates the inactive slot.
+- `backup-druidmedia.sh`: on-demand backup of the old media server's configuration and databases.
 - `druidmedia-htpc-build.md`: end-to-end build/run workflow for host and guest.
 - `druidmedia-physical-build.md`: USB preparation and physical media-server installation.
 - [live-steps.md](live-steps.md): pickup checklist for staging the prepared USB and installing the physical PC.
@@ -30,6 +31,33 @@ Automated Arch-based HTPC build workflow with A/B root slots, shared home/data l
 - Both slots mount `192.168.50.96:/volume1/druidshare` at `/mnt/nas` on demand using NFSv3 and systemd automount. The installer includes `nfs-utils`; an unavailable NAS does not block boot. Accessing the share triggers the mount, and hard NFS mounts retry interrupted I/O rather than risking data corruption. Check it after boot with `ls /mnt/nas` and `findmnt /mnt/nas`.
 - The installer registers the `ccapkgs` repository using its documented `Optional TrustAll` signature policy and installs `ccatv`. Publish the package and its dependencies to the repository before building; installation stops if they cannot be installed.
 
+## Backing up the media server
+
+When `druidmedia` is quiet, check there are no recordings, post-processing,
+playback, or imminent scheduled recordings. Then, from this checkout:
+
+```bash
+ssh druidmedia 'bash -s -- --confirm-quiet' < ./backup-druidmedia.sh
+```
+
+The script runs as the SSH user on `druidmedia2` and requires its NAS export
+at `/mnt/nas`. It refuses to proceed if ccatv reports an active recording or
+job, or a scheduled job is due within two hours. It stops the ccatv user
+services that were running, checks for remaining recording processes, and
+stops Kodi if it was running. It restarts those services and Kodi on success
+or failure. Kodi restart requires the graphical session's `DISPLAY` in the
+user systemd manager. Check the reported errors if any restart fails.
+
+The archive contains Kodi, DVBStreamer adapter databases, ccatv and DVBStreamer
+configuration, comskip configuration, the ccatv database and its SQLite
+sidecars, and the Schedules Direct token cache. It excludes recordings, old
+user service units, helper scripts, and DVBStreamer logs. It checks SQLite
+databases and verifies the archive and SHA-256 before publishing both under
+`/mnt/nas/backups`. Backups are unencrypted and can contain credentials.
+Do not let anyone start a recording during the backup; the check cannot
+prevent external/manual recording activity. If the script or host is forcibly
+terminated, check the services and Kodi manually.
+
 ## Restoring the media-server backup
 
 Restore is disabled by default. To import the verified Debian backup during installation, run inside the live guest:
@@ -38,7 +66,20 @@ Restore is disabled by default. To import the verified Debian backup during inst
 RESTORE_MEDIA_BACKUP=1 /work/druidhtpc/druidhtpc-arch-setup.sh
 ```
 
-The installer temporarily mounts the NAS read-only and verifies `backups/druidmedia-2026-11-15-111810.tar.gz` against its `.sha256` file before extracting directly into `/home/chris`, without copying the archive to local disk. The temporary mount is removed on completion or failure.
+By default, the installer temporarily mounts the NAS read-only and verifies
+`backups/druidmedia-2026-11-15-111810.tar.gz` against its `.sha256` file before
+extracting directly into `/home/chris`, without copying the archive to local
+disk. To choose a new backup, use the path printed by the backup script:
+
+```bash
+RESTORE_MEDIA_BACKUP=1 MEDIA_BACKUP=/mnt/nas/backups/druidmedia-REPLACE.tar.gz \
+  /work/druidhtpc/druidhtpc-arch-setup.sh
+```
+
+The named archive must be directly under `/mnt/nas/backups`, with its
+corresponding `.sha256` file. The temporary mount is removed on completion or
+failure. Copy the updated installer to the USB work partition before using
+this option on the physical machine.
 
 It restores Kodi, DVBStreamer and comskip settings, ccatv config and SQLite database files, and the Schedules Direct token cache, preserving numeric ownership and permissions. Debian user service units and local helper scripts are omitted in favor of the Arch package. The archive contains credentials: opt in only on a trusted VM or the replacement server.
 

@@ -19,10 +19,15 @@ MIRRORLIST_SOURCE="${MIRRORLIST_SOURCE:-/work/ukmirrorlist}"
 SLOT_UPDATE_SOURCE="${SCRIPT_DIR}/druidhtpc-slot-update"
 NAS_SOURCE="192.168.50.96:/volume1/druidshare"
 RESTORE_MEDIA_BACKUP="${RESTORE_MEDIA_BACKUP:-0}"
-MEDIA_BACKUP="/mnt/nas/backups/druidmedia-2026-11-15-111810.tar.gz"
+MEDIA_BACKUP="${MEDIA_BACKUP:-/mnt/nas/backups/druidmedia-2026-11-15-111810.tar.gz}"
 
 if [[ "${RESTORE_MEDIA_BACKUP}" != 0 && "${RESTORE_MEDIA_BACKUP}" != 1 ]]; then
   echo "RESTORE_MEDIA_BACKUP must be 0 or 1." >&2
+  exit 1
+fi
+
+if [[ ! "${MEDIA_BACKUP}" =~ ^/mnt/nas/backups/[a-zA-Z0-9._-]+\.tar\.gz$ ]]; then
+  echo "MEDIA_BACKUP must be a .tar.gz file directly under /mnt/nas/backups." >&2
   exit 1
 fi
 
